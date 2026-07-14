@@ -28,7 +28,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         User::updateOrCreate([
-            'email' => 'superadmin@clinic.test',
+            'email' => 'superadmin@onxy.com',
         ], [
             'tenant_id' => $tenantId,
             'name' => 'Super Admin',

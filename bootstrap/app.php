@@ -5,6 +5,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
+require_once dirname(__DIR__) . '/app/Support/onyx_helpers.php';
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
@@ -12,30 +14,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->validateCsrfTokens(except: [
-            'dashboard', 'dashboard.php',
-            'crm', 'crm.php',
-            'customers', 'customers.php',
-            'customers_action', 'customers_action.php',
-            'suppliers', 'suppliers.php',
-            'suppliers_action', 'suppliers_action.php',
-            'products', 'products.php',
-            'products_action', 'products_action.php',
-            'inventory', 'inventory.php',
-            'sales', 'sales.php',
-            'sales_action', 'sales_action.php',
-            'pos', 'pos.php',
-            'purchases', 'purchases.php',
-            'accounting', 'accounting.php',
-            'banking', 'banking.php',
-            'budgets', 'budgets.php',
-            'assets', 'assets.php',
-            'payroll', 'payroll.php',
-            'reports', 'reports.php',
-            'notifications', 'notifications.php',
-            'settings', 'settings.php',
-            'mobile_app', 'mobile_app.php',
-        ]);
+        $legacyPages = function_exists('onyx_legacy_pages') ? onyx_legacy_pages() : [];
+        $legacyCsrfExceptions = [];
+
+        foreach ($legacyPages as $page) {
+            $legacyCsrfExceptions[] = $page;
+            $legacyCsrfExceptions[] = $page . '.php';
+        }
+
+        $middleware->validateCsrfTokens(except: $legacyCsrfExceptions);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

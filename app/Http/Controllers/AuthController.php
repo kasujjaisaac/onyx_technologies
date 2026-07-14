@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -18,12 +20,17 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email' => ['required','email'],
-            'password' => ['required']
+            'email' => ['required', 'email'],
+            'password' => ['required'],
         ]);
+
+        $credentials['email'] = Str::lower($credentials['email']);
+        $credentials['is_active'] = true;
 
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
+            $this->hydrateLegacySession($request, Auth::user());
+
             return redirect()->intended('/dashboard');
         }
 
@@ -38,31 +45,43 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6|confirmed'
+            'company_name' => ['required', 'string', 'min:2', 'max:255'],
+            'name' => ['required', 'string', 'min:2', 'max:255'],
+            'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
+            'password' => [
+                'required',
+                'confirmed',
+                Password::min(10)->mixedCase()->numbers()->symbols(),
+            ],
         ]);
 
-        $tenantId = DB::table('tenants')->value('id') ?? DB::table('tenants')->insertGetId([
-            'company_name' => 'Default Workspace',
-            'slug' => 'default-workspace',
-            'currency' => 'UGX',
-            'fiscal_year_start' => '2026-01-01',
-            'status' => 'trial',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $data['email'] = Str::lower($data['email']);
 
-        $user = User::create([
-            'tenant_id' => $tenantId,
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role' => 'company_admin',
-            'is_active' => true,
-        ]);
+        $user = DB::transaction(function () use ($data): User {
+            $tenantId = DB::table('tenants')->insertGetId([
+                'company_name' => $data['company_name'],
+                'slug' => $this->uniqueTenantSlug($data['company_name']),
+                'currency' => 'UGX',
+                'fiscal_year_start' => now()->startOfYear()->toDateString(),
+                'status' => 'trial',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return User::create([
+                'tenant_id' => $tenantId,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'role' => 'super_admin',
+                'is_active' => true,
+            ]);
+        });
 
         Auth::login($user);
+        $request->session()->regenerate();
+        $this->hydrateLegacySession($request, $user);
+
         return redirect('/dashboard');
     }
 
@@ -72,5 +91,33 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect('/');
+    }
+
+    private function hydrateLegacySession(Request $request, User $user): void
+    {
+        $tenant = DB::table('tenants')->where('id', $user->tenant_id)->first();
+
+        $request->session()->put([
+            'tenant_id' => $user->tenant_id ?: ($tenant->id ?? 1),
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'company_name' => $tenant->company_name ?? config('app.name', 'Onyx Hub'),
+            'currency' => $tenant->currency ?? 'UGX',
+            'role' => $user->role ?: 'super_admin',
+        ]);
+    }
+
+    private function uniqueTenantSlug(string $companyName): string
+    {
+        $base = Str::slug($companyName) ?: 'workspace';
+        $slug = $base;
+        $counter = 2;
+
+        while (DB::table('tenants')->where('slug', $slug)->exists()) {
+            $slug = $base . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
     }
 }

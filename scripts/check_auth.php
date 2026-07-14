@@ -9,7 +9,7 @@ $app = require __DIR__ . '/../bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
 $ok = Auth::attempt([
-    'email' => 'superadmin@clinic.test',
+    'email' => 'superadmin@onxy.com',
     'password' => 'password',
 ]);
 

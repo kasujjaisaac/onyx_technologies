@@ -137,15 +137,15 @@ $tenant->execute();
 $tenantId = (int) $pdo->query("SELECT `id` FROM `tenants` WHERE `slug` = 'clinic-test' LIMIT 1")->fetchColumn();
 $hash = password_hash('password', PASSWORD_BCRYPT);
 
-$userExists = $pdo->prepare("SELECT `id` FROM `users` WHERE `email` = 'superadmin@clinic.test' LIMIT 1");
+$userExists = $pdo->prepare("SELECT `id` FROM `users` WHERE `email` = 'superadmin@onxy.com' LIMIT 1");
 $userExists->execute();
 
 if (! $userExists->fetchColumn()) {
     $insertUser = $pdo->prepare("INSERT INTO `users`
         (`tenant_id`, `name`, `email`, `email_verified_at`, `password`, `role`, `is_active`, `created_at`, `updated_at`)
-        VALUES (?, 'Super Admin', 'superadmin@clinic.test', NOW(), ?, 'super_admin', 1, NOW(), NOW())");
+        VALUES (?, 'Super Admin', 'superadmin@onxy.com', NOW(), ?, 'super_admin', 1, NOW(), NOW())");
     $insertUser->execute([$tenantId, $hash]);
 }
 
 echo "Fixed database is ready: {$database}" . PHP_EOL;
-echo "Login: superadmin@clinic.test / password" . PHP_EOL;
+echo "Login: superadmin@onxy.com / password" . PHP_EOL;
