@@ -167,6 +167,94 @@ class AuthController extends Controller
         return back()->with('success', 'A new OTP has been sent to your email.');
     }
 
+    public function showForgotPassword()
+    {
+        return view('pages.forgot-password');
+    }
+
+    public function sendPasswordResetLink(Request $request)
+    {
+        $request->merge([
+            'workspace' => $this->normalizeWorkspace((string) $request->input('workspace', '')),
+            'email' => Str::lower((string) $request->input('email', '')),
+        ]);
+
+        $data = $request->validate([
+            'workspace' => ['required', 'string', 'max:80'],
+            'email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $workspace = $this->normalizeWorkspace($data['workspace']);
+        $email = Str::lower(trim($data['email']));
+        $tenant = DB::table('tenants')->where('slug', $workspace)->first();
+        $user = $tenant
+            ? User::where('tenant_id', $tenant->id)->where('email', $email)->where('is_active', true)->first()
+            : null;
+
+        if ($user) {
+            $this->sendPasswordResetEmail($request, $user, $workspace);
+        }
+
+        return back()
+            ->with('success', 'If that account exists, a password reset link has been sent.')
+            ->onlyInput('workspace', 'email');
+    }
+
+    public function showResetPassword(Request $request, string $token)
+    {
+        return view('pages.reset-password', [
+            'token' => $token,
+            'workspace' => $request->query('workspace', ''),
+            'email' => $request->query('email', ''),
+        ]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $request->merge([
+            'workspace' => $this->normalizeWorkspace((string) $request->input('workspace', '')),
+            'email' => Str::lower((string) $request->input('email', '')),
+        ]);
+
+        $data = $request->validate([
+            'workspace' => ['required', 'string', 'max:80'],
+            'email' => ['required', 'email', 'max:255'],
+            'token' => ['required', 'string'],
+            'password' => ['required', 'confirmed'],
+        ]);
+
+        $workspace = $this->normalizeWorkspace($data['workspace']);
+        $email = Str::lower(trim($data['email']));
+        $tenant = DB::table('tenants')->where('slug', $workspace)->first();
+        $user = $tenant
+            ? User::where('tenant_id', $tenant->id)->where('email', $email)->where('is_active', true)->first()
+            : null;
+        $tokenRecord = DB::table('password_reset_tokens')->where('email', $email)->first();
+
+        if (! $user || ! $tokenRecord || ! Hash::check($data['token'], $tokenRecord->token)) {
+            return back()->withErrors(['email' => 'This password reset link is invalid.'])->withInput($request->only('workspace', 'email'));
+        }
+
+        if (! $tokenRecord->created_at || now()->diffInMinutes($tokenRecord->created_at) > 60) {
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+
+            return back()->withErrors(['email' => 'This password reset link has expired.'])->withInput($request->only('workspace', 'email'));
+        }
+
+        $request->validate([
+            'password' => ['required', 'confirmed', $this->passwordRule($user->tenant_id)],
+        ]);
+
+        $user->forceFill([
+            'password' => Hash::make($data['password']),
+            'password_changed_at' => now(),
+        ])->save();
+
+        DB::table('password_reset_tokens')->where('email', $email)->delete();
+
+        return redirect()->route('login')->with('success', 'Password reset successfully. Sign in with your new password.');
+    }
+
     public function showRegister()
     {
         return view('pages.register');
@@ -309,6 +397,36 @@ class AuthController extends Controller
             fn ($message) => $message
                 ->to($user->email)
                 ->subject('Your Onyx login OTP')
+        );
+    }
+
+    private function sendPasswordResetEmail(Request $request, User $user, string $workspace): void
+    {
+        $token = Str::random(64);
+
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $user->email],
+            [
+                'token' => Hash::make($token),
+                'created_at' => now(),
+            ]
+        );
+
+        $resetUrl = route('password.reset', [
+            'token' => $token,
+            'workspace' => $workspace,
+            'email' => $user->email,
+        ]);
+
+        if (app()->runningUnitTests() || app()->environment('local') || config('mail.default') === 'log') {
+            $request->session()->put('password_reset_test_url', $resetUrl);
+        }
+
+        Mail::raw(
+            "Use this link to reset your Onyx password: {$resetUrl}\n\nThis link expires in 60 minutes.",
+            fn ($message) => $message
+                ->to($user->email)
+                ->subject('Reset your Onyx password')
         );
     }
 

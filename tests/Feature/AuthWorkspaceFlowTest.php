@@ -13,7 +13,7 @@ class AuthWorkspaceFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_registration_requires_and_stores_workspace(): void
+    public function test_public_registration_is_currently_disabled(): void
     {
         $response = $this->post('/register', [
             'company_name' => 'Onyx Technologies',
@@ -24,15 +24,38 @@ class AuthWorkspaceFlowTest extends TestCase
             'password_confirmation' => 'Password#12345',
         ]);
 
-        $response->assertRedirect(route('login.otp'));
+        $response->assertRedirect(route('login'));
         $this->assertGuest();
-        $this->assertDatabaseHas('tenants', [
-            'company_name' => 'Onyx Technologies',
-            'slug' => 'onyx-tech',
-        ]);
-        $this->assertDatabaseHas('users', [
+        $this->assertDatabaseMissing('users', ['email' => 'admin@example.test']);
+    }
+
+    public function test_user_can_reset_password_from_email_link(): void
+    {
+        $user = $this->createWorkspaceUser();
+
+        $this->from(route('password.request'))->post(route('password.email'), [
+            'workspace' => 'onyx-tech',
             'email' => 'admin@example.test',
-        ]);
+        ])->assertRedirect(route('password.request'))->assertSessionHas('success');
+
+        $resetUrl = session('password_reset_test_url');
+        $this->assertNotEmpty($resetUrl);
+
+        $path = parse_url($resetUrl, PHP_URL_PATH);
+        parse_str((string) parse_url($resetUrl, PHP_URL_QUERY), $query);
+        $token = basename((string) $path);
+
+        $this->post(route('password.reset.update'), [
+            'workspace' => $query['workspace'],
+            'email' => $query['email'],
+            'token' => $token,
+            'password' => 'NewPassword#12345',
+            'password_confirmation' => 'NewPassword#12345',
+        ])->assertRedirect(route('login'))->assertSessionHas('success');
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('NewPassword#12345', $user->password));
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'admin@example.test']);
     }
 
     public function test_login_requires_matching_workspace_email_and_password(): void

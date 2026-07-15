@@ -261,34 +261,6 @@
             margin-top: 2px;
         }
 
-        .brand-metrics {
-            border-top: 1px solid rgba(255,255,255,.13);
-            display: grid;
-            gap: 10px;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            padding-top: 13px;
-        }
-
-        .metric {
-            min-width: 0;
-        }
-
-        .metric strong {
-            display: block;
-            font-size: 14px;
-            font-weight: 900;
-            line-height: 1;
-        }
-
-        .metric span {
-            color: rgba(255,255,255,.52);
-            display: block;
-            font-size: 9px;
-            font-weight: 800;
-            line-height: 1.3;
-            margin-top: 5px;
-        }
-
         .form-side {
             align-content: center;
             background:
@@ -353,6 +325,11 @@
             font-size: 12px;
             font-weight: 800;
             padding: 11px 12px;
+        }
+
+        .error-box.success {
+            border-color: rgba(143,240,195,.35);
+            color: #8ff0c3;
         }
 
         .field-group {
@@ -450,6 +427,24 @@
             box-shadow: 0 0 0 3px rgba(255,106,0,.18);
         }
 
+        .form-link-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: -2px;
+        }
+
+        .form-link-row a {
+            color: var(--soft);
+            font-size: 11px;
+            font-weight: 900;
+            text-decoration: none;
+            text-transform: uppercase;
+        }
+
+        .form-link-row a:hover {
+            color: var(--accent);
+        }
+
         .primary-button {
             align-items: center;
             background: var(--accent);
@@ -479,9 +474,9 @@
             }
 
             .auth-shell {
-                align-items: flex-start;
+                align-items: center;
                 min-height: calc(100vh - 32px);
-                padding-top: 54px;
+                padding-top: 0;
             }
 
             .login-frame {
@@ -492,19 +487,27 @@
             .brand-side {
                 border-bottom: 1px solid var(--line);
                 border-right: 0;
-                padding: 24px;
+                justify-content: center;
+                padding: 18px 24px;
             }
 
             .brand-panel {
-                gap: 20px;
+                display: flex;
+                justify-content: center;
             }
 
-            .brand-copy h2 {
-                font-size: 22px;
+            .brand-heading {
+                display: block;
             }
 
+            .brand-lockup {
+                justify-content: center;
+            }
+
+            .brand-name,
+            .brand-copy,
             .feature-list {
-                grid-template-columns: 1fr;
+                display: none;
             }
 
             .form-side {
@@ -518,20 +521,13 @@
             }
 
             .brand-side {
-                padding: 22px 18px;
+                padding: 16px 18px;
             }
 
             .brand-lockup {
-                align-items: flex-start;
+                align-items: center;
             }
 
-            .brand-copy h2 {
-                font-size: 20px;
-            }
-
-            .brand-metrics {
-                grid-template-columns: 1fr;
-            }
         }
     </style>
 </head>
@@ -585,20 +581,6 @@
                         </div>
                     </div>
 
-                    <div class="brand-metrics" aria-label="System highlights">
-                        <div class="metric">
-                            <strong>24/7</strong>
-                            <span>Workspace access</span>
-                        </div>
-                        <div class="metric">
-                            <strong>Multi</strong>
-                            <span>Module operations</span>
-                        </div>
-                        <div class="metric">
-                            <strong>Admin</strong>
-                            <span>Controlled login</span>
-                        </div>
-                    </div>
                 </div>
             </aside>
 
@@ -613,6 +595,9 @@
 
                         @if($errors->any())
                             <div class="error-box">{{ $errors->first() }}</div>
+                        @endif
+                        @if(session('success'))
+                            <div class="error-box success">{{ session('success') }}</div>
                         @endif
 
                         <div class="field-group">
@@ -640,6 +625,10 @@
                                     <i class="fa-solid fa-eye" aria-hidden="true"></i>
                                 </button>
                             </div>
+                        </div>
+
+                        <div class="form-link-row">
+                            <a href="{{ route('password.request') }}">Forgot password?</a>
                         </div>
 
                         <button class="primary-button" type="submit">
